@@ -5,10 +5,4 @@ import { Component } from '@angular/core';
   templateUrl: './app.component.html',
   styleUrls: ['./app.component.scss']
 })
-export class AppComponent {
-  errorMessage: string | null = null;
-
-  handleErrorMessage(error: string | null): void {
-    this.errorMessage = error;
-  }
-}
+export class AppComponent {}

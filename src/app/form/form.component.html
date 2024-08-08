@@ -3,21 +3,21 @@
       <label for="textInput">Text Input:</label>
       <input id="textInput" formControlName="textInput" class="input">
     </div>
-    <div class="update-info">Text updated: {{ form.get('textInput')?.value }}</div>
+    <div #updateInfo class="update-info">Text updated: {{ form.get('textInput')?.value }}</div>
 
     <div class="radio-group">
       <label>Radio Input:</label>
       <label><input type="radio" formControlName="radioInput" value="option1"> Option 1</label>
       <label><input type="radio" formControlName="radioInput" value="option2"> Option 2</label>
     </div>
-    <div class="update-info">Radio updated: {{ form.get('radioInput')?.value }}</div>
+    <div #updateInfo class="update-info">Radio updated: {{ form.get('radioInput')?.value }}</div>
 
   
     <div class="checkbox-group">
       <label for="checkboxInput">Checkbox Input:</label>
       <input id="checkboxInput" type="checkbox" formControlName="checkboxInput">
     </div>
-    <div class="update-info">Checkbox updated: {{ form.get('checkboxInput')?.value }}</div>
+    <div #updateInfo class="update-info">Checkbox updated: {{ form.get('checkboxInput')?.value }}</div>
 
 
     <div *ngIf="errorMessage" class="error-message">

@@ -2,60 +2,89 @@ import {
     Component, 
     OnInit, 
     OnDestroy, 
-    OnChanges, 
-    AfterViewInit, 
     ChangeDetectorRef, 
-    ChangeDetectionStrategy, 
-    SimpleChanges 
+    ViewChildren,
+    QueryList,
+    ElementRef
   } from '@angular/core';
-  import { FormBuilder, FormGroup } from '@angular/forms';
+  import { FormControl, FormGroup } from '@angular/forms';
   import { FormService } from '../core/services/form-service';
-  import { debounceTime, switchMap, tap, catchError } from 'rxjs/operators';
-  import { of, Subject, Subscription } from 'rxjs';
+  import { debounceTime, switchMap, tap, catchError, filter, bufferWhen, takeUntil } from 'rxjs/operators';
+  import { of, Subject } from 'rxjs';
   import { HttpStatusCodes } from '../core/enums/http-status-codes.enum';
+  import { InputData } from '../core/models/input-data.model';
+  import { ErrorHandlerService } from '../core/services/error-handler.service';
   
   @Component({
     selector: 'app-form',
     templateUrl: './form.component.html',
     styleUrls: ['./form.component.scss'],
-    changeDetection: ChangeDetectionStrategy.OnPush
   })
-  export class FormComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit {
-    form!: FormGroup;
-    private formUpdate$ = new Subject<any>();
-    private subscriptions: Subscription[] = [];
-    errorMessage: string | null = null;
+  export class FormComponent implements OnInit, OnDestroy {
+    @ViewChildren('updateInfo') updateInfoElements!: QueryList<ElementRef>;
+
+    public form!: FormGroup;
+    public errorMessage: string | null = null;
+
+    private formUpdate$ = new Subject<InputData>();
+    private destroy$ = new Subject<void>();
   
-    constructor(
-      private fb: FormBuilder, 
+    constructor( 
       private formService: FormService,
-      private cdr: ChangeDetectorRef
+      private cdr: ChangeDetectorRef,
+      private errorHandler: ErrorHandlerService,
     ) {
       this.cdr.detach();
     }
   
     ngOnInit() {
-      this.form = this.fb.group({
-        textInput: [''],
-        radioInput: ['option1'],
-        checkboxInput: [false]
-      });
+      this.initData();
+      this.cdr.detectChanges();
+    }
   
-      const formChangesSubscription = this.form.valueChanges.pipe(
+    ngOnDestroy() {
+      this.destroy$.next();
+      this.destroy$.complete();
+    }
+
+    private initData(): void {
+      this.form = new FormGroup({
+        textInput: new FormControl(''),
+        radioInput: new FormControl(['option1']),
+        checkboxInput: new FormControl(false),
+      })
+    
+      const formUpdateInProgress$ = new Subject<void>();
+    
+      this.form.valueChanges.pipe(
+        takeUntil(this.destroy$),
         debounceTime(500),
         tap(value => this.formUpdate$.next(value))
       ).subscribe();
-  
-      this.subscriptions.push(formChangesSubscription);
-  
-      const formUpdateSubscription = this.formUpdate$.pipe(
-        switchMap(value => this.formService.saveData(value).pipe(
-          tap(() => this.errorMessage = null),
-          catchError(error => {
-            this.handleError(error);
-            return of(null);
-          })
-        ))
+      
+    
+      this.formUpdate$.pipe(
+        takeUntil(this.destroy$),
+        tap(() => formUpdateInProgress$.next()),
+        bufferWhen(() => formUpdateInProgress$.pipe(
+          debounceTime(1000)
+        )),
+        filter(values => values.length > 0),
+        switchMap(values => {
+          const lastValue = values[values.length - 1];
+          formUpdateInProgress$.next();
+          return this.formService.saveData(lastValue).pipe(
+            tap(() => {
+              this.errorMessage = null;
+              formUpdateInProgress$.next();
+            }),
+            catchError(error => {
+              this.handleError(error);
+              formUpdateInProgress$.next();
+              return of(null);
+            })
+          );
+        })
       ).subscribe(response => {
         if (response) {
           this.form.patchValue(response, { emitEvent: false });
@@ -63,51 +92,18 @@ import {
           this.cdr.detectChanges();
         }
       });
+    }
   
-      this.subscriptions.push(formUpdateSubscription);
+    private handleError(error: { status: HttpStatusCodes }): void {
+      this.errorMessage = this.errorHandler.handleError(error);
       this.cdr.detectChanges();
     }
   
-    ngOnDestroy() {
-      this.subscriptions.forEach(sub => sub.unsubscribe());
-    }
-  
-    ngOnChanges(changes: SimpleChanges) {}
-  
-    ngAfterViewInit() {}
-  
-    private handleError(error: any) {
-      switch (error.status) {
-        case HttpStatusCodes.BAD_REQUEST:
-          this.errorMessage = 'Bad Request';
-          break;
-        case HttpStatusCodes.UNAUTHORIZED:
-          this.errorMessage = 'Unauthorized';
-          break;
-        case HttpStatusCodes.FORBIDDEN:
-          this.errorMessage = 'Forbidden';
-          break;
-        case HttpStatusCodes.NOT_FOUND:
-          this.errorMessage = 'Not Found';
-          break;
-        case HttpStatusCodes.INTERNAL_SERVER_ERROR:
-          this.errorMessage = 'Internal Server Error';
-          break;
-        case HttpStatusCodes.SERVICE_UNAVAILABLE:
-          this.errorMessage = 'Service Unavailable';
-          break;
-        default:
-          this.errorMessage = 'Unknown error';
-      }
-      this.cdr.detectChanges();
-    }
-  
-    private showUpdatedData(data: any) {
-      const elements = document.querySelectorAll('.update-info');
-      (elements as NodeListOf<HTMLElement>).forEach((element: HTMLElement) => {
-        element.style.display = 'block';
+    private showUpdatedData<T>(data: T): void {
+      this.updateInfoElements.forEach((element: ElementRef) => {
+        element.nativeElement.style.display = 'block';
         setTimeout(() => {
-          element.style.display = 'none';
+          element.nativeElement.style.display = 'none';
         }, 3000);
       });
     }

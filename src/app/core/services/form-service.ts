@@ -1,13 +1,14 @@
 import { Injectable } from '@angular/core';
-import { Observable, of, throwError } from 'rxjs';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { delay, switchMap } from 'rxjs/operators';
 import { HttpStatusCodes } from '../enums/http-status-codes.enum';
+import { InputData } from '../models/input-data.model'
 
 @Injectable({
   providedIn: 'root'
 })
 export class FormService {
-  saveData(data: any): Observable<any> {
+  saveData(data: InputData): Observable<InputData> {
     return of(data).pipe(
       delay(1000),
       switchMap(() => {
